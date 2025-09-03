@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import cors from "cors";
 
 function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -28,6 +29,10 @@ const repl_owner = process.env.REPL_OWNER || '';
 process.env.BASE_URL = process.env.BASE_URL || `https://${repl_id}.${repl_owner}.repl.co`;
 
 const app = express();
+
+app.use(cors({
+  origin: '*',
+}))
 
 // Add cache-busting headers to prevent browser caching issues after package updates
 app.use((req, res, next) => {
