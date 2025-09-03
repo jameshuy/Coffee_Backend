@@ -31,8 +31,13 @@ process.env.BASE_URL = process.env.BASE_URL || `https://${repl_id}.${repl_owner}
 const app = express();
 
 app.use(cors({
-  origin: '*',
-}))
+  origin: [
+    "http://localhost:5173",             // local frontend
+    "https://coffee-frontend-tikz.onrender.com" // deployed frontend
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  credentials: true,
+}));
 
 // Add cache-busting headers to prevent browser caching issues after package updates
 app.use((req, res, next) => {
