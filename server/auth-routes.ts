@@ -274,7 +274,7 @@ authRouter.post('/login', validateBody(loginSchema), async (req: Request, res: R
     res.cookie('auth_token', token, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: 'strict',
+      sameSite: 'none',
       secure: process.env.NODE_ENV === 'production'
     });
     
