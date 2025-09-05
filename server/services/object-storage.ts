@@ -1,4 +1,4 @@
-import { Client } from '@replit/object-storage';
+import { supabase, STORAGE_BUCKET } from '../config/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db';
 import { generatedImages } from '@shared/schema';
@@ -6,33 +6,8 @@ import { eq, gt } from 'drizzle-orm';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Initialize Object Storage with proper configuration for both development and production
-// The Client automatically uses Replit credentials within the Replit environment
-let client: Client;
-
-try {
-  // Check if we have Replit Object Storage credentials in the environment
-  if (process.env.REPLIT_DB_URL || process.env.REPL_ID) {
-    console.log('Initializing Object Storage with Replit credentials');
-    client = new Client();
-  } else {
-    // Fallback configuration for non-Replit environments
-    console.log('Initializing Object Storage with fallback configuration');
-    client = {
-      get: async (key: string) => null,
-      set: async (key: string, value: any) => {},
-      delete: async (key: string) => {},
-      list: async () => [],
-    } as unknown as Client;
-    // This should never happen in deployment, but provides better error handling
-    throw new Error('Object Storage is required and no Replit environment was detected');
-  }
-} catch (error) {
-  console.error('Failed to initialize Object Storage client:', error);
-  // Create a dummy client that will throw appropriate errors if used
-  // This prevents the application from crashing at startup
-  client = new Client();
-}
+// Initialize Supabase Storage client
+console.log('Initializing Supabase Storage client with bucket:', STORAGE_BUCKET);
 
 // Helper function to generate a unique ID
 function generateUniqueId(): string {
@@ -42,15 +17,21 @@ function generateUniqueId(): string {
 // Upload original user image
 export async function uploadOriginalImage(userId: string, imageBuffer: Buffer, extension: string): Promise<string> {
   const uuid = generateUniqueId();
-  const path = `users/${userId}/originals/${uuid}.${extension}`;
+  const filePath = `users/${userId}/originals/${uuid}.${extension}`;
   
-  const result = await client.uploadFromBytes(path, imageBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload original image: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, imageBuffer, {
+      contentType: extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`,
+      upsert: false
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload original image: ${error.message}`);
   }
   
-  console.log(`Uploaded original image to Object Storage: ${path}`);
-  return path;
+  console.log(`Uploaded original image to Supabase Storage: ${filePath}`);
+  return filePath;
 }
 
 // Upload AI-generated image
@@ -66,18 +47,24 @@ export async function uploadGeneratedImage(
   }
 ): Promise<string> {
   const uuid = originalPath.split('/').pop()?.split('.')[0] || generateUniqueId();
-  const path = `users/${userId}/generated/${uuid}-${style}.${extension}`;
+  const filePath = `users/${userId}/generated/${uuid}-${style}.${extension}`;
   
-  const result = await client.uploadFromBytes(path, imageBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload generated image: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, imageBuffer, {
+      contentType: extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`,
+      upsert: false
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload generated image: ${error.message}`);
   }
   
   // Record in database with video data if available
   const dbRecord: any = {
     userId,
     originalPath,
-    generatedPath: path,
+    generatedPath: filePath,
     style,
     isPublic: false
   };
@@ -102,12 +89,12 @@ export async function uploadGeneratedImage(
 
   const [insertedRecord] = await db.insert(generatedImages).values(dbRecord).returning();
   
-  console.log(`Uploaded generated image to Object Storage: ${path}`);
+  console.log(`Uploaded generated image to Supabase Storage: ${filePath}`);
   
   // Trigger automatic thumbnail generation immediately after database record creation
   if (insertedRecord) {
     import('./thumbnail-generator').then(({ generateThumbnail }) => {
-      generateThumbnail(path, userId, insertedRecord.id)
+      generateThumbnail(filePath, userId, insertedRecord.id)
         .then(() => {
           console.log(`✅ Automatic thumbnail generated for ${insertedRecord.id}`);
         })
@@ -131,7 +118,7 @@ export async function uploadGeneratedImage(
     }
   }
   
-  return path;
+  return filePath;
 }
 
 // This function has been removed as part of code cleanup
@@ -140,139 +127,182 @@ export async function uploadGeneratedImage(
 
 // Upload style reference image
 export async function uploadStyleImage(styleId: string, imageBuffer: Buffer, extension: string = 'png'): Promise<string> {
-  const path = `styles/full/${styleId}.${extension}`;
+  const filePath = `styles/full/${styleId}.${extension}`;
   
-  const result = await client.uploadFromBytes(path, imageBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload style image: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, imageBuffer, {
+      contentType: extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`,
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload style image: ${error.message}`);
   }
   
-  console.log(`Uploaded style image to Object Storage: ${path}`);
-  return path;
+  console.log(`Uploaded style image to Supabase Storage: ${filePath}`);
+  return filePath;
 }
 
 // Function for migration script to upload style images with a custom path
 export async function uploadStyleImageWithPath(fileBuffer: Buffer, customPath: string): Promise<string> {
-  const result = await client.uploadFromBytes(customPath, fileBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload style image to custom path: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(customPath, fileBuffer, {
+      contentType: 'image/png', // Default to PNG for style images
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload style image to custom path: ${error.message}`);
   }
   
-  console.log(`Uploaded style image to Object Storage custom path: ${customPath}`);
+  console.log(`Uploaded style image to Supabase Storage custom path: ${customPath}`);
   return customPath;
 }
 
 // Upload style thumbnail
 export async function uploadStyleThumbnail(styleId: string, thumbnailBuffer: Buffer, extension: string): Promise<string> {
-  const path = `styles/thumbnails/${styleId}_thumbnail.${extension}`;
+  const filePath = `styles/thumbnails/${styleId}_thumbnail.${extension}`;
   
-  const result = await client.uploadFromBytes(path, thumbnailBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload style thumbnail: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, thumbnailBuffer, {
+      contentType: extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : `image/${extension}`,
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload style thumbnail: ${error.message}`);
   }
   
-  console.log(`Uploaded style thumbnail to Object Storage: ${path}`);
-  return path;
+  console.log(`Uploaded style thumbnail to Supabase Storage: ${filePath}`);
+  return filePath;
 }
 
 // Upload generated poster thumbnail
 export async function uploadThumbnailToStorage(thumbnailBuffer: Buffer, thumbnailPath: string): Promise<string> {
-  const result = await client.uploadFromBytes(thumbnailPath, thumbnailBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload thumbnail: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(thumbnailPath, thumbnailBuffer, {
+      contentType: 'image/png',
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload thumbnail: ${error.message}`);
   }
   
-  console.log(`Uploaded thumbnail to Object Storage: ${thumbnailPath}`);
+  console.log(`Uploaded thumbnail to Supabase Storage: ${thumbnailPath}`);
   return thumbnailPath;
 }
 
 // Upload compressed video
 export async function uploadCompressedVideoToStorage(videoBuffer: Buffer, videoPath: string): Promise<string> {
-  const result = await client.uploadFromBytes(videoPath, videoBuffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload compressed video: ${result.error.message}`);
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(videoPath, videoBuffer, {
+      contentType: 'video/mp4',
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload compressed video: ${error.message}`);
   }
   
-  console.log(`Uploaded compressed video to Object Storage: ${videoPath}`);
+  console.log(`Uploaded compressed video to Supabase Storage: ${videoPath}`);
   return videoPath;
 }
 
 // Get URL for the image that can be used for download or display
-// Note: The client doesn't have a getDownloadUrl method, we need to generate URLs differently
-export async function getImageUrl(path: string, expiresIn: number = 3600): Promise<string> {
-  // This is a placeholder since getDownloadUrl isn't in the docs
-  // In a real implementation, we would need to generate a pre-signed URL or serve through API
+export async function getImageUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
+  const { data } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(filePath, expiresIn);
   
-  // For now, we'll return the API path that would redirect to the object
-  return `/api/storage-image/${path}`;
+  if (data?.signedUrl) {
+    return data.signedUrl;
+  }
+  
+  // Fallback to API path if signed URL generation fails
+  return `/api/storage-image/${filePath}`;
 }
 
 // Get style image URL
 export async function getStyleImageUrl(styleId: string, extension: string = 'png'): Promise<string> {
-  const imagePath = `styles/images/${styleId}.${extension}`;
-  return `/api/storage-image/${imagePath}`;
+  const imagePath = `styles/full/${styleId}.${extension}`;
+  return await getImageUrl(imagePath);
 }
 
 // Get style thumbnail URL
 export async function getStyleThumbnailUrl(styleId: string, extension: string = 'png'): Promise<string> {
-  // Ensure consistent naming standard in Object Storage (all use styleId_thumbnail.png format)
+  // Ensure consistent naming standard in Supabase Storage (all use styleId_thumbnail.png format)
   const thumbnailPath = `styles/thumbnails/${styleId}_thumbnail.${extension}`;
-  return `/api/storage-image/${thumbnailPath}`;
+  return await getImageUrl(thumbnailPath);
 }
 
 // Delete a specific image
-export async function deleteImage(path: string): Promise<void> {
-  const result = await client.delete(path);
-  if (!result.ok) {
-    throw new Error(`Failed to delete image: ${result.error.message}`);
+export async function deleteImage(filePath: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([filePath]);
+  
+  if (error) {
+    throw new Error(`Failed to delete image: ${error.message}`);
   }
-  console.log(`Deleted image from Object Storage: ${path}`);
+  console.log(`Deleted image from Supabase Storage: ${filePath}`);
 }
 
 // List all images for a user
 export async function listUserImages(userId: string, type: 'originals' | 'generated' = 'generated'): Promise<string[]> {
   const prefix = `users/${userId}/${type}/`;
-  const result = await client.list({ prefix });
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .list(prefix.split('/').slice(0, -1).join('/'), {
+      limit: 1000,
+      search: prefix.split('/').pop()
+    });
   
-  if (!result.ok) {
-    throw new Error(`Failed to list user images: ${result.error.message}`);
+  if (error) {
+    throw new Error(`Failed to list user images: ${error.message}`);
   }
   
-  return result.value.map(item => item.name);
+  return data?.map(item => `${prefix}${item.name}`) || [];
 }
 
 // Check if an image exists
-export async function imageExists(path: string): Promise<boolean> {
-  const result = await client.exists(path);
-  return result.ok ? result.value : false;
+export async function imageExists(filePath: string): Promise<boolean> {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .list(filePath.split('/').slice(0, -1).join('/'), {
+      search: filePath.split('/').pop()
+    });
+  
+  if (error) {
+    console.error('Error checking if image exists:', error);
+    return false;
+  }
+  
+  return data && data.length > 0;
 }
 
 // Download an image as bytes
-export async function downloadImage(path: string): Promise<Buffer> {
-  // Use the download to file approach and then read the file
-  // Make sure the temp directory exists
-  const tempDir = 'temp';
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-  const tempFilePath = `${tempDir}/${path.split('/').pop()}-${Date.now()}`;
-  const fileResult = await client.downloadToFilename(path, tempFilePath);
+export async function downloadImage(filePath: string): Promise<Buffer> {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .download(filePath);
   
-  if (!fileResult.ok) {
-    throw new Error(`Failed to download image: ${fileResult.error.message}`);
+  if (error) {
+    throw new Error(`Failed to download image: ${error.message}`);
   }
   
-  // Read the file into a buffer
-  const buffer = fs.readFileSync(tempFilePath);
-  
-  // Clean up the temp file
-  try {
-    fs.unlinkSync(tempFilePath);
-  } catch (err) {
-    console.warn(`Failed to delete temp file ${tempFilePath}:`, err);
+  if (!data) {
+    throw new Error('No data received from download');
   }
   
-  return buffer;
+  // Convert Blob to Buffer
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // These functions have been removed as part of code cleanup
@@ -302,39 +332,87 @@ export async function cleanupOldImages(ageInDays: number = 30): Promise<number> 
     ...imagesToKeep.map(img => img.generatedPath)
   ]);
   
-  // Get all user images
-  const listResult = await client.list({ prefix: 'users/' });
-  if (!listResult.ok) {
-    throw new Error(`Failed to list images for cleanup: ${listResult.error.message}`);
+  // Get all user images from Supabase Storage
+  const { data: allFiles, error: listError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .list('users', {
+      limit: 1000,
+      sortBy: { column: 'created_at', order: 'desc' }
+    });
+  
+  if (listError) {
+    throw new Error(`Failed to list images for cleanup: ${listError.message}`);
   }
   
   // Delete images not in the keep set
   let deletedCount = 0;
-  for (const image of listResult.value) {
-    const key = image.name; // Use name property from StorageObject
-    if (key && !pathsToKeep.has(key)) {
-      const deleteResult = await client.delete(key);
-      if (deleteResult.ok) {
-        deletedCount++;
+  const filesToDelete: string[] = [];
+  
+  // Recursively collect files to delete
+  const collectFilesToDelete = async (folderPath: string) => {
+    const { data: folderFiles, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(folderPath, { limit: 1000 });
+    
+    if (error) {
+      console.error(`Error listing folder ${folderPath}:`, error);
+      return;
+    }
+    
+    for (const file of folderFiles || []) {
+      const fullPath = `${folderPath}/${file.name}`;
+      if (file.metadata?.mimetype) {
+        // It's a file
+        if (!pathsToKeep.has(fullPath)) {
+          filesToDelete.push(fullPath);
+        }
       } else {
-        console.error(`Failed to delete image during cleanup: ${deleteResult.error.message}`);
+        // It's a folder, recurse
+        await collectFilesToDelete(fullPath);
       }
+    }
+  };
+  
+  // Start collecting files to delete
+  for (const userFolder of allFiles || []) {
+    if (!userFolder.metadata?.mimetype) {
+      // It's a folder, recurse into it
+      await collectFilesToDelete(`users/${userFolder.name}`);
     }
   }
   
-  console.log(`Cleaned up ${deletedCount} old images from Object Storage`);
+  // Delete files in batches
+  if (filesToDelete.length > 0) {
+    const { error: deleteError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove(filesToDelete);
+    
+    if (deleteError) {
+      console.error('Error deleting files during cleanup:', deleteError);
+    } else {
+      deletedCount = filesToDelete.length;
+    }
+  }
+  
+  console.log(`Cleaned up ${deletedCount} old images from Supabase Storage`);
   return deletedCount;
 }
 
 // Upload buffer with custom content type
-export async function uploadBuffer(path: string, buffer: Buffer, contentType: string): Promise<string> {
-  const result = await client.uploadFromBytes(path, buffer);
-  if (!result.ok) {
-    throw new Error(`Failed to upload buffer: ${result.error.message}`);
+export async function uploadBuffer(filePath: string, buffer: Buffer, contentType: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, buffer, {
+      contentType,
+      upsert: true
+    });
+  
+  if (error) {
+    throw new Error(`Failed to upload buffer: ${error.message}`);
   }
   
-  console.log(`Uploaded buffer to Object Storage: ${path}`);
-  return path;
+  console.log(`Uploaded buffer to Supabase Storage: ${filePath}`);
+  return filePath;
 }
 
 // Generate pre-signed URL for file access

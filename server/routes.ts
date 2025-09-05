@@ -2078,7 +2078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prompt: promptToUse,
         style: styleId,
         aspect_ratio: "2:3",
-        input_images: ["[User image URL hidden]", "[Style image URL hidden]"],
+        input_images: [fullImageUrl, fullStyleUrl],
         number_of_images: 1,
         quality: "auto",
         background: "auto",
@@ -2100,6 +2100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         moderation: "low"
       };
       
+      console.log(input)
       // Using the run method as shown in the documentation
       const output = await replicate.run("openai/gpt-image-1", { input });
       
@@ -2682,11 +2683,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const generatedImagePath = `users/${email}/generated/${id}.png`;
       
       // Check if image exists in Object Storage
-      const imageExists = await objectStorage.imageExists(generatedImagePath);
-      if (!imageExists) {
-        console.error(`Image not found in Object Storage: ${generatedImagePath}`);
-        return res.status(404).json({ error: 'Image not found' });
-      }
+      // const imageExists = await objectStorage.imageExists(generatedImagePath);
+      // if (!imageExists) {
+      //   console.error(`Image not found in Object Storage: ${generatedImagePath}`);
+      //   return res.status(404).json({ error: 'Image not found' });
+      // }
       
       // Download the image from Object Storage
       console.log(`Downloading image from Object Storage: ${generatedImagePath}`);

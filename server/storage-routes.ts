@@ -4,7 +4,7 @@ import * as objectStorage from './services/object-storage';
 const router = express.Router();
 
 /**
- * API routes for serving images from Replit Object Storage
+ * API routes for serving images from Supabase Storage
  */
 
 // Get an image or video from object storage by path
@@ -13,10 +13,10 @@ router.get('/storage-image/:path(*)', async (req, res) => {
     const imagePath = req.params.path;
     
     // Check if the image exists
-    const exists = await objectStorage.imageExists(imagePath);
-    if (!exists) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
+    // const exists = await objectStorage.imageExists(imagePath);
+    // if (!exists) {
+    //   return res.status(404).json({ error: 'Image not found' });
+    // }
     
     // Download the image directly
     try {
@@ -65,13 +65,13 @@ router.get('/storage/:path(*)', async (req, res) => {
     const filePath = req.params.path;
     
     // Check if the file exists
-    const exists = await objectStorage.imageExists(filePath); // reuse exists check
-    if (!exists) {
-      return res.status(404).json({ error: 'File not found' });
-    }
+    // const exists = await objectStorage.imageExists(filePath);
+    // if (!exists) {
+    //   return res.status(404).json({ error: 'File not found' });
+    // }
     
     // Download the file directly
-    const fileBuffer = await objectStorage.downloadImage(filePath); // reuse download method
+    const fileBuffer = await objectStorage.downloadImage(filePath);
     
     // Set content type based on file extension
     const extension = filePath.split('.').pop()?.toLowerCase() || 'mp4';
@@ -104,7 +104,7 @@ router.get('/styles/:styleId', async (req, res) => {
     // Redirect to the URL
     res.redirect(styleUrl);
   } catch (error) {
-    console.error('Error getting style image from Object Storage:', error);
+    console.error('Error getting style image from Supabase Storage:', error);
     res.status(500).json({ error: 'Error retrieving style image' });
   }
 });
@@ -118,7 +118,7 @@ router.get('/styles/thumbnails/:styleId', async (req, res) => {
     // Redirect to the URL
     res.redirect(thumbnailUrl);
   } catch (error) {
-    console.error('Error getting style thumbnail from Object Storage:', error);
+    console.error('Error getting style thumbnail from Supabase Storage:', error);
     res.status(500).json({ error: 'Error retrieving style thumbnail' });
   }
 });
@@ -136,7 +136,7 @@ router.get('/user-images/:userId/:type?', async (req, res) => {
     const images = await objectStorage.listUserImages(userId, type as any);
     res.json({ images });
   } catch (error) {
-    console.error('Error listing user images from Object Storage:', error);
+    console.error('Error listing user images from Supabase Storage:', error);
     res.status(500).json({ error: 'Error listing images' });
   }
 });
@@ -159,7 +159,7 @@ router.post('/cleanup-images', async (req, res) => {
       deletedCount
     });
   } catch (error) {
-    console.error('Error cleaning up images from Object Storage:', error);
+    console.error('Error cleaning up images from Supabase Storage:', error);
     res.status(500).json({ error: 'Error cleaning up images' });
   }
 });
