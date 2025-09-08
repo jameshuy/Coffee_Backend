@@ -296,7 +296,11 @@ authRouter.post('/login', validateBody(loginSchema), async (req: Request, res: R
 // Log out
 authRouter.post('/logout', (req: Request, res: Response) => {
   // Clear the auth cookie
-  res.clearCookie('auth_token');
+  res.clearCookie('auth_token', {
+  httpOnly: true,
+  sameSite: "none",
+  secure: true
+});
   
   return res.status(200).json({ message: 'Logged out successfully' });
 });
