@@ -120,7 +120,8 @@ stripeConnectRouter.post('/create-connect-account', requireAuth, async (req: Req
       .where(eq(users.email, userEmail));
 
     // Create account link for onboarding
-    const baseUrl = getBaseUrl(req);
+    // const baseUrl = getBaseUrl(req);
+    const baseUrl = process.env.FRONTEND_URL;
     console.log(`Creating onboarding link with base URL: ${baseUrl}`);
     
     const accountLink = await stripe.accountLinks.create({
@@ -250,7 +251,8 @@ stripeConnectRouter.post('/refresh-onboarding', requireAuth, async (req: Request
     }
 
     // Create new account link for onboarding
-    const baseUrl = getBaseUrl(req);
+    // const baseUrl = getBaseUrl(req);
+    const baseUrl = process.env.FRONTEND_URL;
     console.log(`Refreshing onboarding link with base URL: ${baseUrl}`);
     
     const accountLink = await stripe.accountLinks.create({
