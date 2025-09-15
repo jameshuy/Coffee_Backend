@@ -216,13 +216,13 @@ export async function uploadCompressedVideoToStorage(videoBuffer: Buffer, videoP
 
 // Get URL for the image that can be used for download or display
 export async function getImageUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
-  const { data } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(filePath, expiresIn);
+  // const { data } = await supabase.storage
+  //   .from(STORAGE_BUCKET)
+  //   .createSignedUrl(filePath, expiresIn);
   
-  if (data?.signedUrl) {
-    return data.signedUrl;
-  }
+  // if (data?.signedUrl) {
+  //   return data.signedUrl;
+  // }
   
   // Fallback to API path if signed URL generation fails
   return `/api/storage-image/${filePath}`;

@@ -2337,7 +2337,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fullImageUrl = await getImageUrl(image.generatedPath);
           return {
             ...image,
-            thumbnailPath: "/api/storage-image/" + image.thumbnailPath,
             imageUrl: thumbnailUrl, // Dashboard will load thumbnails
             fullImageUrl: fullImageUrl, // Available for modal
           };
