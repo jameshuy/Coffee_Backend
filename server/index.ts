@@ -16,6 +16,7 @@ import * as path from 'path';
 import { databaseHealthMiddleware } from "./middleware/db-health";
 
 import storageRoutes from "./storage-routes";
+
 import { catalogueRouter } from "./catalogue-routes";
 import cookieParser from 'cookie-parser';
 import authRouter from './auth-routes';
@@ -54,6 +55,11 @@ app.use(express.json({ limit: '50mb' })); // Increase JSON payload limit to 50MB
 app.use(express.urlencoded({ extended: false, limit: '50mb' })); // Also increase URL-encoded payload limit
 app.use(cookieParser()); // Parse cookies for authentication
 
+app.get('/restock', (req, res) => {
+  console.log("received")
+  res.redirect(301, 'https://forms.gle/JXT3dfNVcptfvi2UA');
+});
+
 // Add database health middleware
 app.use(databaseHealthMiddleware); // Circuit breaker for DB issues
 
@@ -71,6 +77,7 @@ app.use('/api/auth', authRouter);
 
 // Use Stripe Connect routes for payment processing
 app.use('/api/stripe-connect', stripeConnectRouter);
+
 
 
 app.use((req, res, next) => {
