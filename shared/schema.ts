@@ -103,6 +103,7 @@ export const generatedImages = pgTable("generated_images", {
   style: text("style").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   isPublic: boolean("is_public").default(false),
+  isApproved: boolean("is_approved").default(false),
   isSaved: boolean("is_saved").default(false), // Track if user saved/downloaded the image
   // Limited edition fields
   totalSupply: integer("total_supply"), // Total number of editions available

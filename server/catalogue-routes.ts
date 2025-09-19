@@ -733,3 +733,136 @@ catalogueRouter.post('/purchase-poster', requireAuthentication, async (req: Requ
     });
   }
 });
+
+catalogueRouter.get('/admin/pending-review', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    // Parse pagination parameters
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    // Fetch images that are public but not yet approved
+    const pendingImages = await db.select({
+      id: generatedImages.id,
+      name: generatedImages.name,
+      generatedPath: generatedImages.generatedPath,
+      thumbnailPath: generatedImages.thumbnailPath,
+      originalPath: generatedImages.originalPath,
+      style: generatedImages.style,
+      createdAt: generatedImages.createdAt,
+      userId: generatedImages.userId,
+      username: users.username,
+      
+      totalSupply: generatedImages.totalSupply,
+      soldCount: generatedImages.soldCount,
+      pricePerUnit: generatedImages.pricePerUnit,
+      momentLink: generatedImages.momentLink,
+      city: generatedImages.city,
+    })
+    .from(generatedImages)
+    .leftJoin(users, eq(generatedImages.userId, users.email))
+    .where(sql`${generatedImages.isPublic} = true AND ${generatedImages.isApproved} = false`)
+    .orderBy(desc(generatedImages.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+    // Count total pending
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(generatedImages)
+      .where(sql`${generatedImages.isPublic} = true AND ${generatedImages.isApproved} = false`);
+    const count = countResult[0].count;
+
+    // Generate URLs for full images (admin view always uses full resolution)
+    const imagesWithUrls = await Promise.all(
+      pendingImages.map(async (image) => {
+        const imagePath = image.generatedPath;
+        
+        // Check cache first
+        const cacheKey = `image_url_${imagePath}`;
+        let imageUrl = urlCache.get(cacheKey) as string;
+        
+        if (!imageUrl) {
+          imageUrl = await getImageUrl(imagePath);
+          urlCache.set(cacheKey, imageUrl);
+        }
+
+        return {
+          ...image,
+          imageUrl, // Full resolution for admin view
+          fullImageUrl: imageUrl,
+          usingThumbnail: false,
+          totalSupply: image.totalSupply || 10,
+          soldCount: image.soldCount || 0,
+          pricePerUnit: image.pricePerUnit || 29.95,
+          remainingSupply: Math.max(0, (image.totalSupply || 10) - (image.soldCount || 0)),
+          isAvailable: (image.totalSupply || 10) > (image.soldCount || 0),
+        };
+      })
+    );
+
+    res.json({
+      images: imagesWithUrls,
+      pagination: {
+        total: count,
+        limit,
+        offset,
+        hasMore: offset + limit < count
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pending review images:', error);
+    res.status(500).json({ error: 'Failed to retrieve pending review images' });
+  }
+});
+
+catalogueRouter.patch('/admin/images/:id/approve', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Update the image to be approved
+    const result = await db
+      .update(generatedImages)
+      .set({ isApproved: true })
+      .where(eq(generatedImages.id, id))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Poster approved and added to catalogue'
+    });
+
+  } catch (error) {
+    console.error('Error approving poster:', error);
+    res.status(500).json({ error: 'Failed to approve poster' });
+  }
+});
+
+catalogueRouter.patch('/admin/images/:id/reject', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Set the image as not public (rejected)
+    const result = await db
+      .update(generatedImages)
+      .set({ isPublic: false, isApproved: false })
+      .where(eq(generatedImages.id, id))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Poster rejected and removed from review queue'
+    });
+
+  } catch (error) {
+    console.error('Error rejecting poster:', error);
+    res.status(500).json({ error: 'Failed to reject poster' });
+  }
+});

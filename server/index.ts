@@ -36,7 +36,7 @@ app.use(cors({
     "http://localhost:5173",             // local frontend
     "https://coffee-frontend-tikz.onrender.com" // deployed frontend
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
 }));
 
