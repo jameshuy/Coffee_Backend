@@ -78,7 +78,7 @@ adminRouter.post('/login', async (req: Request, res: Response) => {
       // Set session cookie (httpOnly for security)
       res.cookie('adminSessionToken', sessionToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Secure in production
+        secure: true, // Secure in production
         maxAge: 2 * 60 * 60 * 1000, // 2 hours
         sameSite: 'none'
       });
